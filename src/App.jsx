@@ -154,12 +154,6 @@ function LandingPage({ onEnter }) {
             letterSpacing: "-2px", lineHeight: 1, background: GOLD_GRAD,
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
           }}>kairos</span>
-          <p style={{
-            fontFamily: LIGHT, fontStyle: "italic", color: C.goldSoft,
-            fontSize: 15, marginTop: 12, marginBottom: 0, letterSpacing: "0.5px",
-          }}>
-            moments worth capturing
-          </p>
           <div style={{ width: 36, height: 1, background: C.goldSoft, margin: "14px auto 0", opacity: 0.4 }} />
         </div>
 
@@ -183,9 +177,6 @@ function LandingPage({ onEnter }) {
           </button>
         </div>
 
-        <p style={{ textAlign: "center", fontFamily: LIGHT, fontStyle: "italic", color: C.goldDim, fontSize: 12, marginTop: 20 }}>
-          your memories. your strip. forever.
-        </p>
       </div>
     </div>
   );
@@ -439,7 +430,7 @@ function Photobooth({ name }) {
             <div style={{ flex: "1 1 460px", minWidth: 300, ...S.card }}>
               <div style={{
                 position: "relative", borderRadius: 14, overflow: "hidden",
-                background: "#080202", marginBottom: 16, width: "100%", height: 300,
+                background: "#080202", marginBottom: 16, width: "100%", aspectRatio: "4/3",
               }}>
                 <video ref={videoRef} autoPlay playsInline
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: filterCss }} />
