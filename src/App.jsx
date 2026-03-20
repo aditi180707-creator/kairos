@@ -1,24 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { createRoom, joinRoom, listenRoom, startRoom } from "./firebase";
 
 const FONT_LINK = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap');`;
 
 // ── Palette: Deep Wine bg · Sand Gold / Champagne text ───────────────────────
 const C = {
-  pageBg:      "#1E0608",   // deepest wine — page base
-  pageGrad:    "#2E0910",   // slightly lighter wine — gradient end
-  card:        "#2C0A10",   // card surface
-  inputBg:     "#3A0F18",   // input background
-  inputBorder: "#5C1A28",   // burgundy border
-
-  burgundy:    "#75162D",   // accent / outline
+  pageBg:      "#1E0608",
+  pageGrad:    "#2E0910",
+  card:        "#2C0A10",
+  inputBg:     "#3A0F18",
+  inputBorder: "#5C1A28",
+  burgundy:    "#75162D",
   maroon:      "#4A0E1A",
-
-  // text: gold / champagne family
-  goldBright:  "#F2D9A0",   // Sand Gold — headings
-  goldMid:     "#F2E5C6",   // Champagne Beige — body
-  goldSoft:    "#C9A97A",   // warm tan — labels / muted
-  goldDim:     "#7A5A3A",   // dim gold — meta / placeholder
-
+  goldBright:  "#F2D9A0",
+  goldMid:     "#F2E5C6",
+  goldSoft:    "#C9A97A",
+  goldDim:     "#7A5A3A",
   divider:     "#4A1220",
   shadow:      "rgba(8,1,1,0.5)",
   shadowDeep:  "rgba(8,1,1,0.7)",
@@ -27,7 +24,6 @@ const C = {
 const SERIF = "'Playfair Display', Georgia, serif";
 const LIGHT = "'Cormorant Garamond', Georgia, serif";
 
-// ── Shared style objects ──────────────────────────────────────────────────────
 const S = {
   page: {
     minHeight: "100vh",
@@ -104,7 +100,6 @@ const S = {
   },
 };
 
-// ── Constants ─────────────────────────────────────────────────────────────────
 const FILTERS = [
   { id: "none",    label: "None",    css: "none" },
   { id: "vintage", label: "Vintage", css: "sepia(0.55) contrast(1.08) brightness(0.96) saturate(0.75)" },
@@ -133,15 +128,10 @@ function Logo({ size = 28, center = false }) {
   return (
     <div style={{ textAlign: center ? "center" : "left" }}>
       <span style={{
-        fontFamily: SERIF,
-        fontSize: size,
-        fontWeight: 700,
-        fontStyle: "italic",
+        fontFamily: SERIF, fontSize: size, fontWeight: 700, fontStyle: "italic",
         letterSpacing: "-0.5px",
         background: "linear-gradient(135deg, #F2D9A0 0%, #F2E5C6 50%, #E8C870 100%)",
-        WebkitBackgroundClip: "text",
-        WebkitTextFillColor: "transparent",
-        backgroundClip: "text",
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
       }}>
         kairos
       </span>
@@ -187,9 +177,7 @@ function Pill({ label, active, onClick }) {
       color: active ? "#1E0608" : C.goldSoft,
       fontWeight: active ? 700 : 400,
       boxShadow: active ? `0 2px 10px ${C.shadowDeep}` : "none",
-    }}>
-      {label}
-    </button>
+    }}>{label}</button>
   );
 }
 
@@ -206,9 +194,7 @@ function SideBtn({ label, active, onClick }) {
       fontWeight: active ? 700 : 400,
       boxShadow: active ? `0 2px 10px ${C.shadowDeep}` : "none",
       textAlign: "left",
-    }}>
-      {label}
-    </button>
+    }}>{label}</button>
   );
 }
 
@@ -223,12 +209,25 @@ function LandingPage({ onEnter }) {
   const [mode, setMode]         = useState(null);
   const [joinCode, setJoinCode] = useState("");
   const [generatedCode]         = useState(genRoomCode);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
   const hasName = name.trim().length > 0;
 
-  const handleContinue = () => {
+  const handleCreate = async () => {
     if (!hasName) return;
-    if (mode === "create") onEnter({ name: name.trim(), roomCode: generatedCode, isHost: true });
-    else if (mode === "join" && joinCode.trim()) onEnter({ name: name.trim(), roomCode: joinCode.trim().toUpperCase(), isHost: false });
+    setLoading(true); setError("");
+    await createRoom(generatedCode, name.trim());
+    setLoading(false);
+    onEnter({ name: name.trim(), roomCode: generatedCode, isHost: true });
+  };
+
+  const handleJoin = async () => {
+    if (!hasName || !joinCode.trim()) return;
+    setLoading(true); setError("");
+    const result = await joinRoom(joinCode.trim().toUpperCase(), name.trim());
+    setLoading(false);
+    if (result.error) { setError(result.error); return; }
+    onEnter({ name: name.trim(), roomCode: joinCode.trim().toUpperCase(), isHost: false });
   };
 
   return (
@@ -254,6 +253,12 @@ function LandingPage({ onEnter }) {
           <input value={name} onChange={e => setName(e.target.value)} placeholder=""
             style={{ ...S.input, marginBottom: 24 }} />
 
+          {error && (
+            <p style={{ fontFamily: LIGHT, fontStyle: "italic", color: "#e05555", fontSize: 13, margin: "-12px 0 16px", textAlign: "center" }}>
+              {error}
+            </p>
+          )}
+
           {!mode && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <button onClick={() => setMode("create")} disabled={!hasName}
@@ -274,7 +279,8 @@ function LandingPage({ onEnter }) {
                 borderRadius: 12, padding: "20px 16px", textAlign: "center",
               }}>
                 <p style={{ ...S.label, textAlign: "center", marginBottom: 10 }}>Room Code</p>
-                <p style={{ fontSize: 34, fontWeight: 700, fontFamily: SERIF, margin: 0, letterSpacing: "7px",
+                <p style={{
+                  fontSize: 34, fontWeight: 700, fontFamily: SERIF, margin: 0, letterSpacing: "7px",
                   background: "linear-gradient(135deg,#F2D9A0,#E8C870)",
                   WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
                 }}>
@@ -284,7 +290,10 @@ function LandingPage({ onEnter }) {
                   Share this with friends
                 </p>
               </div>
-              <button onClick={handleContinue} style={S.btnPrimary}>Enter Room</button>
+              <button onClick={handleCreate} disabled={loading}
+                style={{ ...S.btnPrimary, opacity: loading ? 0.6 : 1, cursor: loading ? "not-allowed" : "pointer" }}>
+                {loading ? "Creating…" : "Enter Room"}
+              </button>
               <button onClick={() => setMode(null)} style={S.btnGhost}>← back</button>
             </div>
           )}
@@ -293,15 +302,15 @@ function LandingPage({ onEnter }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <label style={S.label}>Room Code</label>
-                <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                <input value={joinCode} onChange={e => { setJoinCode(e.target.value.toUpperCase()); setError(""); }}
                   placeholder="" maxLength={6}
                   style={{ ...S.input, fontSize: 22, letterSpacing: "7px", textAlign: "center" }} />
               </div>
-              <button onClick={handleContinue} disabled={!joinCode.trim()}
-                style={{ ...S.btnPrimary, opacity: joinCode.trim() ? 1 : 0.35, cursor: joinCode.trim() ? "pointer" : "not-allowed" }}>
-                Join Room
+              <button onClick={handleJoin} disabled={!joinCode.trim() || loading}
+                style={{ ...S.btnPrimary, opacity: joinCode.trim() && !loading ? 1 : 0.35, cursor: joinCode.trim() && !loading ? "pointer" : "not-allowed" }}>
+                {loading ? "Joining…" : "Join Room"}
               </button>
-              <button onClick={() => setMode(null)} style={S.btnGhost}>← back</button>
+              <button onClick={() => { setMode(null); setError(""); }} style={S.btnGhost}>← back</button>
             </div>
           )}
         </div>
@@ -312,9 +321,28 @@ function LandingPage({ onEnter }) {
 
 // ── Room Lobby ────────────────────────────────────────────────────────────────
 function RoomLobby({ session, onStart }) {
-  const participants = session.isHost
-    ? [{ name: session.name, isHost: true }, { name: "Waiting…", pending: true }]
-    : [{ name: "Host", isHost: true }, { name: session.name }];
+  const [participants, setParticipants] = useState([]);
+  const [roomStatus, setRoomStatus]     = useState("waiting");
+
+  // Listen to Firebase room in real time
+  useEffect(() => {
+    const unsub = listenRoom(session.roomCode, data => {
+      if (!data) return;
+      setParticipants(Object.values(data.participants || {}));
+      setRoomStatus(data.status);
+    });
+    return () => unsub();
+  }, [session.roomCode]);
+
+  // Non-host: auto-advance when host starts
+  useEffect(() => {
+    if (!session.isHost && roomStatus === "active") onStart();
+  }, [roomStatus, session.isHost, onStart]);
+
+  const handleStart = async () => {
+    await startRoom(session.roomCode);
+    onStart();
+  };
 
   return (
     <div style={S.page}>
@@ -326,7 +354,8 @@ function RoomLobby({ session, onStart }) {
         <div style={S.card}>
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <p style={{ ...S.label, textAlign: "center" }}>Room</p>
-            <p style={{ fontSize: 32, fontWeight: 700, fontFamily: SERIF, margin: 0, letterSpacing: "7px",
+            <p style={{
+              fontSize: 32, fontWeight: 700, fontFamily: SERIF, margin: 0, letterSpacing: "7px",
               background: "linear-gradient(135deg,#F2D9A0,#E8C870)",
               WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
             }}>
@@ -337,19 +366,26 @@ function RoomLobby({ session, onStart }) {
           <Divider />
 
           <p style={{ ...S.label, marginBottom: 14 }}>In this room</p>
-          {participants.map((p, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-              <Avatar name={p.name} pending={p.pending} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontFamily: LIGHT, fontSize: 15, color: p.pending ? C.goldDim : C.goldMid, fontStyle: p.pending ? "italic" : "normal" }}>
-                  {p.name}
-                </span>
-                {p.isHost && !p.pending && (
-                  <span style={{ fontSize: 9, color: C.goldSoft, letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: SERIF }}>host</span>
-                )}
+
+          {participants.length === 0 ? (
+            <p style={{ fontFamily: LIGHT, fontStyle: "italic", color: C.goldDim, fontSize: 13, marginBottom: 12 }}>
+              Connecting…
+            </p>
+          ) : (
+            participants.map((p, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                <Avatar name={p.name} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontFamily: LIGHT, fontSize: 15, color: C.goldMid }}>
+                    {p.name}
+                  </span>
+                  {p.isHost && (
+                    <span style={{ fontSize: 9, color: C.goldSoft, letterSpacing: "1.5px", textTransform: "uppercase", fontFamily: SERIF }}>host</span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
 
           <div style={{
             background: C.inputBg, border: `1.5px dashed ${C.inputBorder}`,
@@ -362,10 +398,17 @@ function RoomLobby({ session, onStart }) {
             </p>
           </div>
 
-          <button onClick={session.isHost ? onStart : undefined}
-            style={{ ...S.btnPrimary, opacity: session.isHost ? 1 : 0.5, cursor: session.isHost ? "pointer" : "default" }}>
-            {session.isHost ? "Start Photobooth" : "Waiting for host…"}
-          </button>
+          {session.isHost ? (
+            <button onClick={handleStart} style={S.btnPrimary}>
+              Start Photobooth{participants.length > 1 ? ` (${participants.length} people)` : ""}
+            </button>
+          ) : (
+            <div style={{ textAlign: "center", padding: "14px 0" }}>
+              <p style={{ fontFamily: LIGHT, fontStyle: "italic", color: C.goldSoft, fontSize: 14, margin: 0 }}>
+                ✦ Waiting for host to start…
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -479,6 +522,10 @@ function Photobooth({ session }) {
     a.href = stripDataUrl; a.download = `kairos-${Date.now()}.jpg`; a.click();
   };
 
+  const shareWhatsApp = () => {
+    window.open(`https://wa.me/?text=${encodeURIComponent(`📸 Just captured a memory with kairos!\n${shareLink}`)}`, "_blank");
+  };
+
   const retake = () => { setPhotos([]); setShowResult(false); setStripDataUrl(null); };
 
   return (
@@ -517,7 +564,8 @@ function Photobooth({ session }) {
             <div style={{ flex: "1 1 460px", minWidth: 300, ...S.card }}>
               <div style={{
                 position: "relative", borderRadius: 14, overflow: "hidden",
-                background: "#080202", marginBottom: 18, aspectRatio: "4/3",
+                background: "#080202", marginBottom: 18,
+                width: "100%", height: 300,
               }}>
                 <video ref={videoRef} autoPlay playsInline
                   style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: filterCss }} />
@@ -526,16 +574,13 @@ function Photobooth({ session }) {
                   <div style={{ position: "absolute", inset: 0, background: "rgba(242,217,160,0.25)", pointerEvents: "none" }} />
                 )}
 
-                {/* countdown — small bottom-right bubble */}
                 {countdown !== null && (
                   <div style={{
                     position: "absolute", bottom: 14, right: 14,
                     width: 50, height: 50, borderRadius: "50%",
-                    background: "rgba(44,10,16,0.82)",
-                    backdropFilter: "blur(8px)",
+                    background: "rgba(44,10,16,0.82)", backdropFilter: "blur(8px)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    boxShadow: `0 2px 14px ${C.shadowDeep}`,
-                    border: `1px solid ${C.inputBorder}`,
+                    boxShadow: `0 2px 14px ${C.shadowDeep}`, border: `1px solid ${C.inputBorder}`,
                   }}>
                     <span style={{
                       fontFamily: SERIF, fontSize: 20, fontWeight: 700, lineHeight: 1,
@@ -545,7 +590,6 @@ function Photobooth({ session }) {
                   </div>
                 )}
 
-                {/* shot counter */}
                 {isCapturing && (
                   <div style={{
                     position: "absolute", top: 12, left: 12,
@@ -558,7 +602,6 @@ function Photobooth({ session }) {
                   </div>
                 )}
 
-                {/* corner marks — gold */}
                 {[["top:10px","left:10px","T","L"],["top:10px","right:10px","T","R"],
                   ["bottom:10px","left:10px","B","L"],["bottom:10px","right:10px","B","R"]].map(([a,b,v,h], i) => {
                   const [ak,av] = a.split(":"); const [bk,bv] = b.split(":");
@@ -582,28 +625,24 @@ function Photobooth({ session }) {
 
             {/* Controls */}
             <div style={{ flex: "0 0 210px", minWidth: 190, display: "flex", flexDirection: "column", gap: 14 }}>
-
               <div style={S.card}>
                 <p style={S.label}>Timer</p>
                 <div style={{ display: "flex", gap: 7 }}>
                   {TIMER_OPTIONS.map(t => <Pill key={t} label={`${t}s`} active={timerDuration===t} onClick={() => setTimerDuration(t)} />)}
                 </div>
               </div>
-
               <div style={S.card}>
                 <p style={S.label}>Filter</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {FILTERS.map(f => <SideBtn key={f.id} label={f.label} active={selectedFilter===f.id} onClick={() => setSelectedFilter(f.id)} />)}
                 </div>
               </div>
-
               <div style={S.card}>
                 <p style={S.label}>Frame</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {FRAMES.map(fr => <SideBtn key={fr.id} label={fr.label} active={selectedFrame===fr.id} onClick={() => setSelectedFrame(fr.id)} />)}
                 </div>
               </div>
-
               {photos.length > 0 && (
                 <div style={S.card}>
                   <p style={S.label}>Preview</p>
@@ -647,15 +686,27 @@ function Photobooth({ session }) {
                   </p>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
                 <button onClick={downloadStrip} style={{ ...S.btnPrimary, flex: 1, padding: "13px 0" }}>Download</button>
                 <button onClick={retake} style={{ ...S.btnSecondary, flex: 1, padding: "12px 0" }}>Retake</button>
               </div>
+              {/* WhatsApp */}
+              <button onClick={shareWhatsApp} style={{
+                width: "100%", background: "#25D366", color: "#fff", border: "none",
+                borderRadius: 12, padding: "13px 0", fontSize: 12, fontFamily: SERIF,
+                cursor: "pointer", letterSpacing: "1.5px", textTransform: "uppercase", fontWeight: 600,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                boxShadow: "0 4px 16px rgba(37,211,102,0.22)",
+              }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                Share on WhatsApp
+              </button>
             </div>
 
             {/* QR + Memory */}
             <div style={{ flex: "1 1 300px", minWidth: 260, display: "flex", flexDirection: "column", gap: 16 }}>
-
               <div style={S.card}>
                 <p style={S.label}>Share Your Strip</p>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -679,7 +730,8 @@ function Photobooth({ session }) {
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <Avatar name={session?.name} size={44} />
                   <div>
-                    <p style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 600, fontStyle: "italic", margin: "0 0 4px",
+                    <p style={{
+                      fontFamily: SERIF, fontSize: 15, fontWeight: 600, fontStyle: "italic", margin: "0 0 4px",
                       background: "linear-gradient(135deg,#F2D9A0,#E8C870)",
                       WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text",
                     }}>
@@ -716,7 +768,7 @@ function Photobooth({ session }) {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState("landing");
+  const [screen, setScreen]   = useState("landing");
   const [session, setSession] = useState(null);
 
   if (screen === "landing") return <LandingPage onEnter={d => { setSession(d); setScreen("lobby"); }} />;
